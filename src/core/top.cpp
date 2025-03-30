@@ -1,4 +1,5 @@
 #include "top.h"
+#include <iostream>
 
 namespace riscv {
 
@@ -20,8 +21,8 @@ RiscvProcessor::RiscvProcessor(sc_core::sc_module_name name) :
     fetch.pc_out(pc_fetch_to_decode);
     fetch.instruction_out(instruction_fetch_to_decode);
     fetch.mem_data(mem_data_read);
-    fetch.mem_addr(mem_addr);
-    fetch.mem_read(mem_read_enable);
+    fetch.mem_addr(mem_instr_addr);       // 连接到指令地址
+    fetch.mem_read(mem_instr_read_enable); // 连接到指令读信号
     
     // 连接Decode模块
     decode.clk(clk);
@@ -36,7 +37,7 @@ RiscvProcessor::RiscvProcessor(sc_core::sc_module_name name) :
     decode.alu_op(alu_op_decode_to_execute);
     decode.operand1(operand1_decode_to_execute);
     decode.operand2(operand2_decode_to_execute);
-    decode.mem_read(mem_read_enable);
+    decode.mem_read(mem_data_read_enable);  // 连接到数据读信号
     decode.mem_write(mem_write_enable);
     decode.reg_write(reg_write_decode_to_regfile);
     decode.is_branch(is_branch_decode_to_execute);
@@ -77,10 +78,47 @@ RiscvProcessor::RiscvProcessor(sc_core::sc_module_name name) :
     
     SC_METHOD(process);
     sensitive << clk.pos();
+    sensitive << mem_instr_read_enable << mem_data_read_enable;
+    sensitive << mem_instr_addr << mem_data_addr;
+    sensitive << alu_result_execute_to_memory;
 }
 
 void RiscvProcessor::process() {
-    // 此方法用于处理可能的额外同步逻辑
+    // 内存访问仲裁逻辑
+    if (mem_data_read_enable.read()) {
+        // 数据访问优先级高于指令获取
+        mem_read_enable.write(true);
+        mem_addr.write(alu_result_execute_to_memory.read()); // 使用ALU结果作为数据地址
+        
+        // 数据访问需要暂停指令获取
+        stall.write(true);
+        
+        std::cout << "Data memory read access at address 0x" 
+                  << std::hex << mem_addr.read().to_uint() << std::dec << std::endl;
+    } 
+    else if (mem_instr_read_enable.read()) {
+        // 如果没有数据访问，处理指令获取
+        mem_read_enable.write(true);
+        mem_addr.write(mem_instr_addr.read()); // 使用PC作为指令地址
+        stall.write(false);
+        
+        std::cout << "Instruction fetch at address 0x" 
+                  << std::hex << mem_addr.read().to_uint() << std::dec << std::endl;
+    } 
+    else {
+        // 没有内存访问
+        mem_read_enable.write(false);
+        stall.write(false);
+    }
+    
+    // 处理内存写访问
+    if (mem_write_enable.read()) {
+        // 如果有数据写入请求，使用ALU结果作为地址
+        mem_addr.write(alu_result_execute_to_memory.read());
+        
+        std::cout << "Data memory write access at address 0x" 
+                  << std::hex << mem_addr.read().to_uint() << std::dec << std::endl;
+    }
 }
 
 } // namespace riscv

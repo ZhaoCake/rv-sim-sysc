@@ -21,7 +21,7 @@ public:
     sc_core::sc_in<bool> write_enable;
     sc_core::sc_out<Word> read_data;
     
-    // Constructor
+    // Constructor and destructor
     SC_HAS_PROCESS(Memory);
     Memory(sc_core::sc_module_name name);
     
@@ -29,7 +29,8 @@ public:
     bool load_program(const std::string& filename);
     
 private:
-    std::vector<Byte> memory;
+    // Using standard C++ byte type for memory to avoid SystemC overhead
+    std::vector<uint8_t> memory;
     
     void memory_process();
     Word read_word(Word addr);

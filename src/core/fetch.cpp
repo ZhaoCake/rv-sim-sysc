@@ -1,4 +1,6 @@
 #include "fetch.h"
+#include <iostream>
+#include <iomanip>
 
 namespace riscv {
 
@@ -14,32 +16,32 @@ void Fetch::fetch_process() {
         pc_out.write(0);
         instruction_out.write(0);
         mem_read.write(false);
-    } else {
-        if (!stall.read()) {
-            Word next_pc;
-            
-            if (branch_taken.read()) {
-                next_pc = branch_target.read();
-            } else {
-                next_pc = pc + 4; // 移动到下一条指令
-            }
-            
-            // 发送内存读取请求
-            mem_addr.write(pc); // First read instruction at current PC
-            mem_read.write(true);
-            
-            // Then update PC for next cycle
+        return;
+    }
+    
+    // On each clock, read the instruction at the current PC
+    mem_addr.write(pc);
+    mem_read.write(true);
+    
+    // Output the current PC and fetched instruction
+    pc_out.write(pc);
+    
+    // Get instruction from memory
+    Word instruction = mem_data->read();
+    instruction_out.write(instruction);
+    
+    // Debug output
+    std::cout << "Fetch: PC=0x" << std::hex << std::setw(8) << std::setfill('0') << pc.to_uint() 
+              << ", Instr=0x" << std::setw(8) << instruction.to_uint() << std::dec << std::endl;
+    
+    // Update PC for next cycle
+    if (!stall.read()) {
+        if (branch_taken.read()) {
+            Word next_pc = branch_target.read();
+            std::cout << "Branch taken: jumping to 0x" << std::hex << next_pc.to_uint() << std::dec << std::endl;
             pc = next_pc;
-            
-            // 输出当前PC和取出的指令
-            pc_out.write(pc);
-            instruction_out.write(mem_data->read());
-            
-            // Debug output
-            std::cout << "Fetch: PC=0x" << std::hex << pc.to_uint() 
-                      << ", Instr=0x" << mem_data->read().to_uint() << std::endl;
         } else {
-            mem_read.write(false);
+            pc = pc + 4;
         }
     }
 }
