@@ -61,13 +61,43 @@ void Execute::execute_process() {
     
     // 分支处理
     if (is_branch.read()) {
-        // 对于JAL和JALR指令，始终分支
-        if (result != 0) {
+        // More detailed branch logic to handle different branch types
+        Word pc_val = pc.read();
+        Word imm_val = imm_value.read();
+        
+        // Special handling for JAL and JALR
+        // For JAL: PC = PC + imm (PC relative)
+        // For JALR: PC = rs1 + imm (absolute)
+        bool is_jal = (operation == ALU_ADD && result.to_uint() == pc_val.to_uint() + 4);
+        bool is_jalr = (operation == ALU_ADD && result.to_uint() != pc_val.to_uint() + 4);
+        
+        if (is_jal || is_jalr) {
             branch_taken.write(true);
-            branch_target.write(pc.read() + imm_value.read());
-        } else {
-            branch_taken.write(false);
-            branch_target.write(0);
+            // For JAL, pc_val + imm_val; for JALR, just result (already calculated as rs1+imm)
+            branch_target.write(is_jalr ? (result.to_uint() & ~1) : (pc_val + imm_val)); 
+        }
+        else {
+            // Normal branch instructions
+            bool take_branch = false;
+            
+            switch (operation) {
+                case ALU_SUB: // BEQ/BNE
+                    take_branch = (result.to_uint() == 0); // BEQ
+                    break;
+                case ALU_SLT: // BLT/BGE
+                case ALU_SLTU: // BLTU/BGEU
+                    take_branch = (result.to_uint() != 0);
+                    break;
+                default:
+                    take_branch = false;
+            }
+            
+            branch_taken.write(take_branch);
+            if (take_branch) {
+                branch_target.write(pc_val + imm_val);
+            } else {
+                branch_target.write(0);
+            }
         }
     } else {
         branch_taken.write(false);

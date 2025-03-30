@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -I$(SYSTEMC_HOME)/include
+CXXFLAGS = -g -std=c++17 -Wall -I$(SYSTEMC_HOME)/include
 LDFLAGS = -L$(SYSTEMC_HOME)/lib-linux64 -lsystemc -lm
 
 # 定义源文件和构建目录

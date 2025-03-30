@@ -28,36 +28,60 @@ void Memory::memory_process() {
 }
 
 Word Memory::read_word(Word addr) {
-    if (addr >= MEM_SIZE - 3) {
-        std::cerr << "Memory read out of bounds: " << std::hex << addr << std::endl;
+    unsigned int address = addr.to_uint();
+    
+    // Check for valid alignment (words should be 4-byte aligned)
+    if (address % 4 != 0) {
+        std::cerr << "Warning: Unaligned memory read at address 0x" << std::hex << address << std::endl;
+        // Continue with unaligned read (some RISC-V implementations support this)
+    }
+    
+    // Check bounds with proper unsigned comparison
+    if (address >= MEM_SIZE - 3) {
+        std::cerr << "Error: Memory read out of bounds: 0x" << std::hex << address << std::endl;
         return 0;
     }
     
     // Little-endian读取
     Word data = 0;
-    data |= static_cast<Word>(memory[addr]) & 0xFF;
-    data |= (static_cast<Word>(memory[addr + 1]) & 0xFF) << 8;
-    data |= (static_cast<Word>(memory[addr + 2]) & 0xFF) << 16;
-    data |= (static_cast<Word>(memory[addr + 3]) & 0xFF) << 24;
+    data |= static_cast<Word>(memory[address]) & 0xFF;
+    data |= (static_cast<Word>(memory[address + 1]) & 0xFF) << 8;
+    data |= (static_cast<Word>(memory[address + 2]) & 0xFF) << 16;
+    data |= (static_cast<Word>(memory[address + 3]) & 0xFF) << 24;
     
     return data;
 }
 
 void Memory::write_word(Word addr, Word data) {
-    if (addr >= MEM_SIZE - 3) {
-        std::cerr << "Memory write out of bounds: " << std::hex << addr << std::endl;
+    unsigned int address = addr.to_uint();
+    
+    // Check for valid alignment
+    if (address % 4 != 0) {
+        std::cerr << "Warning: Unaligned memory write at address 0x" << std::hex << address << std::endl;
+        // Continue with unaligned write
+    }
+    
+    // Check bounds with proper unsigned comparison
+    if (address >= MEM_SIZE - 3) {
+        std::cerr << "Error: Memory write out of bounds: 0x" << std::hex << address << std::endl;
         return;
     }
     
     // Little-endian写入
-    memory[addr] = data & 0xFF;
-    memory[addr + 1] = (data >> 8) & 0xFF;
-    memory[addr + 2] = (data >> 16) & 0xFF;
-    memory[addr + 3] = (data >> 24) & 0xFF;
+    memory[address] = data.to_uint() & 0xFF;
+    memory[address + 1] = (data.to_uint() >> 8) & 0xFF;
+    memory[address + 2] = (data.to_uint() >> 16) & 0xFF;
+    memory[address + 3] = (data.to_uint() >> 24) & 0xFF;
 }
 
+
+/*
+* 加载程序到内存
+* @param filename 程序文件名, 例如"program.bin"
+* @return 成功加载返回true，失败返回false
+*/
 bool Memory::load_program(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary);
+    std::ifstream file(filename, std::ios::binary); // 以二进制模式打开文件，也就是传入的是bin文件
     if (!file) {
         std::cerr << "Failed to open program file: " << filename << std::endl;
         return false;
