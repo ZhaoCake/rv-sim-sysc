@@ -228,3 +228,235 @@ SC_REPORT_ERROR("ID", "Error message");
 SC_REPORT_FATAL("ID", "Fatal error message");
 ```
 
+## 8. SystemC 与 SystemVerilog/Verilog 语法对照
+
+对于熟悉Verilog/SystemVerilog的工程师，以下对照表可帮助理解SystemC概念。
+
+### 8.1 基本结构对照
+
+| 概念 | SystemC | Verilog/SystemVerilog |
+|------|---------|----------------------|
+| 模块定义 | `SC_MODULE(ModuleName) { ... }` | `module ModuleName(...); ... endmodule` |
+| 端口声明 | `sc_in<bool> clk;` | `input logic clk;` |
+| | `sc_out<sc_uint<8>> data;` | `output logic [7:0] data;` |
+| | `sc_inout<bool> io_pin;` | `inout logic io_pin;` |
+| 信号/线网 | `sc_signal<bool> sig;` | `logic sig;` 或 `wire sig;` |
+| 参数/常量 | `static const int WIDTH = 8;` | `parameter WIDTH = 8;` |
+| 敏感列表 | `sensitive << clk.pos();` | `@(posedge clk)` |
+| 模块实例化 | `SubModule* sub = new SubModule("sub");` | `SubModule sub(...);` |
+| 连线 | `sub->in(sig);` | `.in(sig)` |
+| 时间单位 | `SC_NS`, `SC_PS` | `ns`, `ps` |
+| 主函数 | `int sc_main(int argc, char* argv[]) { ... }` | (没有直接对应概念，仿真器自动执行) |
+
+### 8.2 数据类型对照
+
+| SystemC | SystemVerilog |
+|---------|--------------|
+| `bool` | `logic` |
+| `sc_bit` | `bit` |
+| `sc_bv<N>` | `bit [N-1:0]` |
+| `sc_uint<N>` | `logic unsigned [N-1:0]` |
+| `sc_int<N>` | `logic signed [N-1:0]` |
+| `sc_bigint<N>`, `sc_biguint<N>` | (超过64位的大整数，没有直接对应) |
+| `sc_fixed<W,I>` | (需要使用实数和转换函数模拟) |
+
+### 8.3 行为描述对照
+
+| 功能 | SystemC | SystemVerilog |
+|------|---------|---------------|
+| 组合逻辑 | `SC_METHOD(process); sensitive << in1 << in2;` | `always_comb begin ... end` |
+| 时序逻辑 | `SC_METHOD(process); sensitive << clk.pos();` | `always_ff @(posedge clk) begin ... end` |
+| 过程延迟 | `wait(10, SC_NS);` | `#10;` |
+| 条件等待 | `wait(condition_event);` | `wait(condition);` |
+| 变量赋值 | `var = value;` | `var = value;` |
+| 信号赋值 | `signal.write(value);` | `signal <= value;` 或 `assign signal = value;` |
+| 信号读取 | `value = signal.read();` | `value = signal;` |
+
+### 8.4 进程/过程对照
+
+| SystemC | SystemVerilog |
+|---------|---------------|
+| `SC_METHOD(process)` | `always_comb` 或 `always @(*)` |
+| `SC_CTHREAD(process, clk.pos())` | `always_ff @(posedge clk)` |
+| `SC_THREAD(process)` | 使用`initial begin ... end`和`fork...join`的组合 |
+
+### 8.5 并发和同步对照
+
+| 概念 | SystemC | SystemVerilog |
+|------|---------|---------------|
+| 并发执行 | 多个`SC_METHOD`进程并行执行 | 多个`always`块并行执行 |
+| 同步控制 | `wait()`, `notify()`, `event` | `wait fork`, `disable fork` |
+| 事件同步 | `sc_event evt; evt.notify();` | 没有直接对应，使用信号变化 |
+| 延时 | `wait(10, SC_NS);` | `#10;` |
+
+### 8.6 接口和通信
+
+| 概念 | SystemC | SystemVerilog |
+|------|---------|---------------|
+| 基本接口 | 端口和信号 | 端口和线网 |
+| 分层通信 | 通道、接口、端口 | 接口、通道、任务/函数 |
+| FIFO | `sc_fifo<T>` | 需自行实现或使用类 |
+| 回调 | 事件通知和事件查找器 | 任务调用、fork-join |
+
+### 8.7 仿真控制
+
+| 功能 | SystemC | SystemVerilog |
+|------|---------|---------------|
+| 启动仿真 | `sc_start();` | (由仿真器控制) |
+| 结束仿真 | `sc_stop();` | `$finish;` |
+| 打印调试 | `std::cout << msg;` | `$display("%s", msg);` |
+| 转储波形 | `sc_trace(file, signal, name);` | `$dumpvars;` |
+| 时间控制 | `sc_time_stamp()` | `$time` |
+
+### 8.8 测试环境
+
+| 概念 | SystemC | SystemVerilog |
+|------|---------|---------------|
+| 测试台 | 自定义C++类 | `module testbench` |
+| 激励生成 | C++函数或类方法 | 任务和函数 |
+| 检查结果 | C++ `if/else` 或断言 | `assert` 语句 |
+| 覆盖率 | 需额外库支持 | 内置覆盖率指令 |
+| 随机化 | C++标准库或自定义 | 内置约束随机化 |
+
+### 8.9 代码风格区别
+
+1. **抽象级别**：
+   - SystemC：更高级，面向对象，适合系统级和算法级建模
+   - SystemVerilog：更贴近硬件，适合RTL和门级建模
+
+2. **语法风格**：
+   - SystemC：C++语法，使用`.`和`->`访问成员
+   - SystemVerilog：HDL语法，使用`.`访问成员
+
+3. **编译与执行**：
+   - SystemC：需要C++编译器，生成可执行文件
+   - SystemVerilog：需要HDL仿真器直接解释执行
+
+4. **扩展能力**：
+   - SystemC：可以利用全部C++特性
+   - SystemVerilog：语言扩展受限于HDL规范
+
+### 8.10 示例对比
+
+**例1：简单计数器**
+
+SystemC:
+```cpp
+SC_MODULE(Counter) {
+    sc_in<bool> clk;
+    sc_in<bool> rst;
+    sc_out<sc_uint<8>> count;
+    
+    sc_uint<8> counter;
+    
+    SC_CTOR(Counter) {
+        SC_METHOD(process);
+        sensitive << clk.pos() << rst;
+        counter = 0;
+    }
+    
+    void process() {
+        if (rst.read()) {
+            counter = 0;
+        } else if (clk.pos()) {
+            counter++;
+        }
+        count.write(counter);
+    }
+};
+```
+
+SystemVerilog:
+```systemverilog
+module Counter(
+    input  logic       clk,
+    input  logic       rst,
+    output logic [7:0] count
+);
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) 
+            count <= 8'd0;
+        else
+            count <= count + 1'b1;
+    end
+endmodule
+```
+
+**例2：简单状态机**
+
+SystemC:
+```cpp
+SC_MODULE(FSM) {
+    sc_in<bool> clk;
+    sc_in<bool> rst;
+    sc_in<bool> input;
+    sc_out<bool> output;
+    
+    enum State { S0, S1, S2 };
+    State state;
+    
+    SC_CTOR(FSM) {
+        SC_METHOD(state_logic);
+        sensitive << clk.pos() << rst;
+        state = S0;
+    }
+    
+    void state_logic() {
+        if (rst.read()) {
+            state = S0;
+            output.write(false);
+        } else if (clk.pos()) {
+            switch (state) {
+                case S0:
+                    state = input.read() ? S1 : S0;
+                    output.write(false);
+                    break;
+                case S1:
+                    state = input.read() ? S2 : S0;
+                    output.write(false);
+                    break;
+                case S2:
+                    state = input.read() ? S2 : S0;
+                    output.write(true);
+                    break;
+            }
+        }
+    }
+};
+```
+
+SystemVerilog:
+```systemverilog
+module FSM (
+    input  logic clk,
+    input  logic rst,
+    input  logic input_signal,
+    output logic output_signal
+);
+    typedef enum logic [1:0] {S0, S1, S2} state_t;
+    state_t state;
+    
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= S0;
+            output_signal <= 1'b0;
+        end else begin
+            case (state)
+                S0: begin
+                    state <= input_signal ? S1 : S0;
+                    output_signal <= 1'b0;
+                end
+                S1: begin
+                    state <= input_signal ? S2 : S0;
+                    output_signal <= 1'b0;
+                end
+                S2: begin
+                    state <= input_signal ? S2 : S0;
+                    output_signal <= 1'b1;
+                end
+            endcase
+        end
+    end
+endmodule
+```
+
