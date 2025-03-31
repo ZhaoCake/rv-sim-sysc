@@ -5,62 +5,77 @@
 #include <cstdint>
 
 namespace riscv {
-    // 基本数据类型 - 使用SystemC数据类型
-    using Byte = sc_dt::sc_uint<8>;
-    using Word = sc_dt::sc_uint<32>;
-    using RegAddr = sc_dt::sc_uint<5>;  // 正确使用5-bit寄存器地址
-    
-    // 标准C++类型 - 用于联合体
-    using CppByte = uint8_t;
-    using CppWord = uint32_t;
-    
-    // SystemC信号类型
-    using WordSignal = sc_core::sc_signal<Word>;
-    using ByteSignal = sc_core::sc_signal<Byte>;
-    using BoolSignal = sc_core::sc_signal<bool>;
-    using RegAddrSignal = sc_core::sc_signal<RegAddr>;
-    
-    // 指令格式 - 保留位域结构，方便指令解码
-    struct RTypeInst {
-        unsigned int opcode : 7;
-        unsigned int rd     : 5;
-        unsigned int funct3 : 3;
-        unsigned int rs1    : 5;
-        unsigned int rs2    : 5;
-        unsigned int funct7 : 7;
-    };
-    
-    struct ITypeInst {
-        unsigned int opcode : 7;
-        unsigned int rd     : 5;
-        unsigned int funct3 : 3;
-        unsigned int rs1    : 5;
-        unsigned int imm    : 12;
-    };
-    
-    struct STypeInst {
-        unsigned int opcode : 7;
-        unsigned int imm1   : 5;
-        unsigned int funct3 : 3;
-        unsigned int rs1    : 5;
-        unsigned int rs2    : 5;
-        unsigned int imm2   : 7;
-    };
-    
-    struct UTypeInst {
-        unsigned int opcode : 7;
-        unsigned int rd     : 5;
-        unsigned int imm    : 20;
-    };
-    
-    // 指令联合体，使用标准C++类型避免构造/析构函数问题
-    union Instruction {
-        CppWord value;
-        RTypeInst r;
-        ITypeInst i;
-        STypeInst s;
-        UTypeInst u;
-    };
-}
+
+// Word type definition (32-bit)
+using Word = sc_dt::sc_uint<32>;
+
+// Register address type (5-bit)
+using RegAddr = sc_dt::sc_uint<5>;
+
+// Signal types for easier reference
+using WordSignal = sc_core::sc_signal<Word>;
+using BoolSignal = sc_core::sc_signal<bool>;
+using RegAddrSignal = sc_core::sc_signal<RegAddr>;
+
+// Instruction formats as per RISC-V spec
+struct RType {
+    uint32_t opcode : 7;
+    uint32_t rd : 5;
+    uint32_t funct3 : 3;
+    uint32_t rs1 : 5;
+    uint32_t rs2 : 5;
+    uint32_t funct7 : 7;
+};
+
+struct IType {
+    uint32_t opcode : 7;
+    uint32_t rd : 5;
+    uint32_t funct3 : 3;
+    uint32_t rs1 : 5;
+    uint32_t imm : 12;
+};
+
+struct SType {
+    uint32_t opcode : 7;
+    uint32_t imm0 : 5;
+    uint32_t funct3 : 3;
+    uint32_t rs1 : 5;
+    uint32_t rs2 : 5;
+    uint32_t imm1 : 7;
+};
+
+struct BType {
+    uint32_t opcode : 7;
+    uint32_t imm0 : 5;
+    uint32_t funct3 : 3;
+    uint32_t rs1 : 5;
+    uint32_t rs2 : 5;
+    uint32_t imm1 : 7;
+};
+
+struct UType {
+    uint32_t opcode : 7;
+    uint32_t rd : 5;
+    uint32_t imm : 20;
+};
+
+struct JType {
+    uint32_t opcode : 7;
+    uint32_t rd : 5;
+    uint32_t imm : 20;
+};
+
+// Union for easier access to different instruction formats
+union Instruction {
+    uint32_t value;
+    RType r;
+    IType i;
+    SType s;
+    BType b;
+    UType u;
+    JType j;
+};
+
+} // namespace riscv
 
 #endif // TYPES_H

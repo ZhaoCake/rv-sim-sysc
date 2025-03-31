@@ -1,6 +1,6 @@
 # 汇编测试文件构建Makefile
 
-RISCV_PREFIX = riscv32-unknown-elf-
+RISCV_PREFIX = riscv64-linux-gnu-
 AS = $(RISCV_PREFIX)as
 LD = $(RISCV_PREFIX)ld
 OBJCOPY = $(RISCV_PREFIX)objcopy

@@ -1,130 +1,159 @@
 #include <systemc>
 #include <iostream>
-#include <iomanip>
-#include <thread>
-#include <chrono>
 #include <string>
-#include "core/top.h"
+#include "core/Top.h"
 
-void print_usage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " <program_file> [options]" << std::endl;
-    std::cout << "Options:" << std::endl;
-    std::cout << "  --wave <filename>    Generate waveform trace (VCD format)" << std::endl;
-    std::cout << "  --cycles <num>       Maximum simulation cycles (default: 200)" << std::endl;
-    std::cout << "  --slow               Add delays between cycles for observation" << std::endl;
-    std::cout << "  --help               Display this help message" << std::endl;
-    std::cout << std::endl;
-    std::cout << "Example: " << prog_name << " add_test.bin --wave wave.vcd" << std::endl;
-    std::cout << "View waveforms with GTKWave: gtkwave wave.vcd" << std::endl;
+using namespace sc_core;
+using namespace riscv;
+
+// Command line options
+struct Options {
+    std::string program_file;
+    uint32_t num_cycles;
+    bool dump_registers;
+    bool dump_memory;
+    std::string memory_dump_file;
+    uint32_t memory_dump_start;
+    uint32_t memory_dump_size;
+};
+
+// Parse command line arguments
+Options parse_arguments(int argc, char* argv[]) {
+    Options opts;
+    
+    // Default values
+    opts.program_file = "";
+    opts.num_cycles = 100;  // Default number of cycles to run
+    opts.dump_registers = true;
+    opts.dump_memory = false;
+    opts.memory_dump_file = "memory_dump.bin";
+    opts.memory_dump_start = 0;
+    opts.memory_dump_size = 256;
+    
+    // Parse arguments
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        
+        if (arg == "--program" || arg == "-p") {
+            if (i + 1 < argc) {
+                opts.program_file = argv[++i];
+            } else {
+                std::cerr << "Error: --program requires a file path" << std::endl;
+                exit(1);
+            }
+        } else if (arg == "--cycles" || arg == "-c") {
+            if (i + 1 < argc) {
+                opts.num_cycles = std::stoi(argv[++i]);
+            } else {
+                std::cerr << "Error: --cycles requires a value" << std::endl;
+                exit(1);
+            }
+        } else if (arg == "--no-reg-dump") {
+            opts.dump_registers = false;
+        } else if (arg == "--dump-memory" || arg == "-m") {
+            opts.dump_memory = true;
+            
+            // Optional memory dump file path
+            if (i + 1 < argc && argv[i+1][0] != '-') {
+                opts.memory_dump_file = argv[++i];
+            }
+        } else if (arg == "--mem-start") {
+            if (i + 1 < argc) {
+                opts.memory_dump_start = std::stoul(argv[++i], nullptr, 0);
+            } else {
+                std::cerr << "Error: --mem-start requires a value" << std::endl;
+                exit(1);
+            }
+        } else if (arg == "--mem-size") {
+            if (i + 1 < argc) {
+                opts.memory_dump_size = std::stoul(argv[++i], nullptr, 0);
+            } else {
+                std::cerr << "Error: --mem-size requires a value" << std::endl;
+                exit(1);
+            }
+        } else if (arg == "--help" || arg == "-h") {
+            std::cout << "RISC-V SystemC Simulator" << std::endl;
+            std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
+            std::cout << "Options:" << std::endl;
+            std::cout << "  --program, -p FILE    Program binary file to load" << std::endl;
+            std::cout << "  --cycles, -c NUM      Number of cycles to run (default: 100)" << std::endl;
+            std::cout << "  --no-reg-dump         Don't dump register contents after simulation" << std::endl;
+            std::cout << "  --dump-memory, -m     Dump memory contents after simulation" << std::endl;
+            std::cout << "  --mem-start ADDR      Start address for memory dump (default: 0)" << std::endl;
+            std::cout << "  --mem-size SIZE       Size of memory to dump in bytes (default: 256)" << std::endl;
+            std::cout << "  --help, -h            Show this help message" << std::endl;
+            exit(0);
+        } else if (opts.program_file.empty()) {
+            // Assume it's the program file if not specified with flag
+            opts.program_file = arg;
+        } else {
+            std::cerr << "Warning: Ignoring unknown argument: " << arg << std::endl;
+        }
+    }
+    
+    return opts;
 }
 
 int sc_main(int argc, char* argv[]) {
-    // 默认参数值
-    std::string program_file;
-    std::string wave_file = "";  // 空字符串表示不生成波形
-    unsigned int max_cycles = 200;
-    bool slow_mode = false;
+    // Parse command line arguments
+    Options opts = parse_arguments(argc, argv);
     
-    // 解析命令行参数
-    if (argc < 2) {
-        print_usage(argv[0]);
+    // Check if program file is provided
+    if (opts.program_file.empty()) {
+        std::cerr << "Error: No program file specified" << std::endl;
+        std::cerr << "Run with --help for usage information" << std::endl;
         return 1;
     }
     
-    program_file = argv[1];
+    // Create signals
+    sc_signal<bool> clk_sig;
+    sc_signal<bool> reset_sig;
     
-    // 处理选项参数
-    for (int i = 2; i < argc; i++) {
-        std::string arg = argv[i];
-        
-        if (arg == "--wave" && i + 1 < argc) {
-            wave_file = argv[++i];
-        } else if (arg == "--cycles" && i + 1 < argc) {
-            max_cycles = std::stoi(argv[++i]);
-        } else if (arg == "--slow") {
-            slow_mode = true;
-        } else if (arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        } else {
-            std::cerr << "Unknown option: " << arg << std::endl;
-            print_usage(argv[0]);
-            return 1;
-        }
-    }
+    // Create processor top module
+    Top processor("riscv_processor");
+    processor.clk(clk_sig);
+    processor.reset(reset_sig);
     
-    try {
-        // 创建时钟和复位信号
-        sc_core::sc_clock clock("clock", 20, sc_core::SC_NS);  // 20ns，50MHz
-        sc_core::sc_signal<bool> reset;
-        
-        // 创建处理器实例
-        riscv::RiscvProcessor processor("riscv_processor");
-        processor.clk(clock);
-        processor.reset(reset);
-        
-        // 创建波形跟踪文件（如果指定了）
-        sc_core::sc_trace_file* tf = nullptr;
-        if (!wave_file.empty()) {
-            tf = sc_core::sc_create_vcd_trace_file(wave_file.c_str());
-            if (tf) {
-                std::cout << "Waveform tracing enabled to file: " << wave_file << std::endl;
-                
-                // 添加基本信号到波形文件
-                sc_core::sc_trace(tf, clock, "clock");
-                sc_core::sc_trace(tf, reset, "reset");
-                
-                // 使用处理器的trace方法添加内部信号
-                processor.trace(tf);
-            }
-        }
-        
-        // 加载程序
-        if (!processor.load_program(program_file)) {
-            if (tf) sc_core::sc_close_vcd_trace_file(tf);
-            return 1;
-        }
-        
-        // 初始化仿真
-        std::cout << "Starting reset phase..." << std::endl;
-        reset.write(true);
-        sc_core::sc_start(40, sc_core::SC_NS);  // 等待复位, 40ns是复位时间
-        reset.write(false);
-        std::cout << "Reset complete, starting simulation..." << std::endl;
-        
-        // 运行仿真，直到达到最大周期数
-        unsigned int cycle_count = 0;
-        
-        while (cycle_count < max_cycles) {
-            std::cout << "\n--- Cycle " << cycle_count << " ---" << std::endl;
-            sc_core::sc_start(20, sc_core::SC_NS);  // 一个时钟周期
-            cycle_count++;
-            
-            // 检测空指令(0x00000000)
-            // 这里需要处理器实例添加一个方法来获取当前指令
-            // 例如: if (processor.current_instruction() == 0) break;
-            
-            // 每个周期后添加小延迟，便于观察（如果启用）
-            if (slow_mode) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-        }
-        
-        if (cycle_count >= max_cycles) {
-            std::cout << "\nSimulation stopped after reaching maximum cycle count (" 
-                      << max_cycles << ")" << std::endl;
-        }
-        
-        std::cout << "\nSimulation completed after " << cycle_count << " cycles at " 
-                  << sc_core::sc_time_stamp() << std::endl;
-        
-        // 关闭波形文件
-        if (tf) sc_core::sc_close_vcd_trace_file(tf);
-                
-        return 0;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+    // Load program
+    std::cout << "Loading program from " << opts.program_file << std::endl;
+    if (!processor.load_program(opts.program_file)) {
+        std::cerr << "Error: Failed to load program" << std::endl;
         return 1;
     }
+    
+    // Initial reset
+    reset_sig.write(true);
+    clk_sig.write(false);
+    
+    sc_start(10, SC_NS);
+    
+    reset_sig.write(false);
+    
+    // Run simulation
+    std::cout << "Starting simulation for " << opts.num_cycles << " cycles..." << std::endl;
+    
+    for (uint32_t i = 0; i < opts.num_cycles; i++) {
+        // Toggle clock
+        clk_sig.write(!clk_sig.read());
+        sc_start(5, SC_NS);
+        
+        clk_sig.write(!clk_sig.read());
+        sc_start(5, SC_NS);
+    }
+    
+    std::cout << "Simulation completed after " << opts.num_cycles << " cycles." << std::endl;
+    
+    // Dump register contents
+    if (opts.dump_registers) {
+        std::cout << "\nFinal register state:" << std::endl;
+        processor.dump_registers();
+    }
+    
+    // Dump memory contents
+    if (opts.dump_memory) {
+        std::cout << "Dumping memory to " << opts.memory_dump_file << std::endl;
+        processor.dump_memory(opts.memory_dump_file, opts.memory_dump_start, opts.memory_dump_size);
+    }
+    
+    return 0;
 }
